@@ -1,50 +1,58 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  GeoJSON,
-  Tooltip,
-} from "react-leaflet";
-import type { Feature, FeatureCollection, GeoJsonObject } from "geojson";
+import { MapContainer, TileLayer, GeoJSON } from "react-leaflet";
+import L from "leaflet";
+import type { Feature, FeatureCollection, GeoJsonObject, Point } from "geojson";
 import "leaflet/dist/leaflet.css";
 
-// Snapshot of the DRCOG project_areas_2022 layer, committed to the repo
-// at /public/drcog-project-areas-2022.geojson. Refreshed nightly via the
-// GitHub Action in .github/workflows/refresh-drcog.yml. Avoids rate-
-// limiting the DRCOG AGOL endpoint on every page load.
-const DRCOG_URL = "/drcog-project-areas-2022.geojson";
+// Tennessee transit stops, combined from public GTFS feeds. Built by
+// scripts/build-tn-transit-stops.mjs and committed to /public.
+// Currently includes Knoxville KAT (720 stops); add more agencies in
+// the builder script as their direct GTFS URLs are sourced.
+const TN_STOPS_URL = "/tn-transit-stops.geojson";
 
-// Denver-ish center
-const CENTER: [number, number] = [39.74, -104.99];
-const ZOOM = 9;
+// Center on Tennessee
+const CENTER: [number, number] = [35.86, -86.66];
+const ZOOM = 7;
 
-const STYLE = {
-  color: "#f5d76e",
-  weight: 1.2,
-  fillColor: "#f5d76e",
-  fillOpacity: 0.18,
-};
+interface TNStopProps {
+  stop_id?: string;
+  stop_name?: string;
+  agency?: string;
+  agency_name?: string;
+  region?: string;
+  color?: string;
+}
 
-const HIGHLIGHT_STYLE = {
-  color: "#ffffff",
-  weight: 2,
-  fillColor: "#f5d76e",
-  fillOpacity: 0.45,
-};
+interface TNMetadata {
+  generator?: string;
+  generated_at?: string;
+  total_stops?: number;
+  agencies?: Array<{
+    id: string;
+    name: string;
+    region: string;
+    color: string;
+    gtfs: string;
+  }>;
+}
 
 export default function Map() {
   const [data, setData] = useState<FeatureCollection | null>(null);
+  const [meta, setMeta] = useState<TNMetadata | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(DRCOG_URL)
+    fetch(TN_STOPS_URL)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then((json) => setData(json))
+      .then((json: FeatureCollection & { metadata?: TNMetadata }) => {
+        setData(json);
+        if (json.metadata) setMeta(json.metadata);
+      })
       .catch((e) => setError(String(e)));
   }, []);
 
@@ -54,11 +62,7 @@ export default function Map() {
         center={CENTER}
         zoom={ZOOM}
         scrollWheelZoom
-        style={{
-          height: "100%",
-          width: "100%",
-          background: "#0f1116",
-        }}
+        style={{ height: "100%", width: "100%", background: "#0f1116" }}
       >
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -67,40 +71,35 @@ export default function Map() {
         {data && (
           <GeoJSON
             data={data as GeoJsonObject}
-            style={() => STYLE}
+            pointToLayer={(feature: Feature<Point>, latlng) => {
+              const p = (feature.properties || {}) as TNStopProps;
+              return L.circleMarker(latlng, {
+                radius: 4,
+                color: p.color || "#f5d76e",
+                weight: 1,
+                fillColor: p.color || "#f5d76e",
+                fillOpacity: 0.7,
+              });
+            }}
             onEachFeature={(feature: Feature, layer) => {
-              const props = (feature.properties ?? {}) as Record<string, unknown>;
-              const label =
-                (props.NAME as string | undefined) ??
-                (props.PROJECT_NAME as string | undefined) ??
-                (props.Project_Name as string | undefined) ??
-                (props.project_name as string | undefined) ??
-                (props.PROJECT as string | undefined) ??
-                `Feature ${feature.id ?? ""}`;
-              layer.bindTooltip(String(label), { sticky: true });
-              // Highlight on hover. Cast to any — leaflet's Layer base
-              // type doesn't expose setStyle but Path subclasses do.
-              type LayerWithStyle = { setStyle?: (s: object) => void };
-              layer.on("mouseover", (e) => {
-                (e.target as LayerWithStyle).setStyle?.(HIGHLIGHT_STYLE);
-              });
-              layer.on("mouseout", (e) => {
-                (e.target as LayerWithStyle).setStyle?.(STYLE);
-              });
+              const p = (feature.properties || {}) as TNStopProps;
+              const label = `${p.stop_name || "(unnamed)"}<br><small>${p.agency_name || p.agency || ""}</small>`;
+              layer.bindTooltip(label, { sticky: true });
             }}
           />
         )}
       </MapContainer>
+
       <header
         style={{
           position: "absolute",
           top: 12,
           left: 12,
           zIndex: 1000,
-          background: "rgba(15, 17, 22, 0.85)",
+          background: "rgba(15, 17, 22, 0.88)",
           color: "#f5d76e",
-          padding: "10px 14px",
-          borderRadius: "8px",
+          padding: "12px 16px",
+          borderRadius: 8,
           fontFamily:
             "var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif",
           backdropFilter: "blur(6px)",
@@ -118,14 +117,38 @@ export default function Map() {
           Stuck Gum
         </div>
         <div style={{ fontSize: 11, color: "#8a93a6", marginTop: 4 }}>
-          DRCOG Project Areas (2022)
+          Tennessee Transit Stops
           {data
-            ? ` · ${data.features.length} polygons`
+            ? ` · ${data.features.length} stops`
             : error
             ? ` · ${error}`
             : " · loading…"}
         </div>
+        {meta?.agencies && meta.agencies.length > 0 && (
+          <div style={{ marginTop: 8, fontSize: 11, color: "#d7dae0" }}>
+            {meta.agencies.map((a) => (
+              <div
+                key={a.id}
+                style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}
+              >
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    background: a.color,
+                  }}
+                />
+                <span>
+                  {a.name} · <span style={{ color: "#8a93a6" }}>{a.region}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </header>
+
       <footer
         style={{
           position: "absolute",
