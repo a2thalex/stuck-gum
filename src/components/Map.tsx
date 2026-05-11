@@ -10,9 +10,11 @@ import {
 import type { Feature, FeatureCollection, GeoJsonObject } from "geojson";
 import "leaflet/dist/leaflet.css";
 
-const DRCOG_URL =
-  "https://gis.drcog.org/server/rest/services/RDC/project_areas_2022/MapServer/0/query" +
-  "?where=1%3D1&outFields=*&f=geojson&outSR=4326";
+// Snapshot of the DRCOG project_areas_2022 layer, committed to the repo
+// at /public/drcog-project-areas-2022.geojson. Refreshed nightly via the
+// GitHub Action in .github/workflows/refresh-drcog.yml. Avoids rate-
+// limiting the DRCOG AGOL endpoint on every page load.
+const DRCOG_URL = "/drcog-project-areas-2022.geojson";
 
 // Denver-ish center
 const CENTER: [number, number] = [39.74, -104.99];
