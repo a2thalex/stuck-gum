@@ -27,11 +27,20 @@ const AGENCIES = [
     color: "#f5d76e",
     gtfs: "https://Knoxville.Syncromatics.com/GTFS",
   },
+  {
+    id: "mata",
+    name: "Memphis Area Transit Authority (MATA)",
+    region: "Memphis",
+    color: "#3498db",
+    // Direct GTFS .zip mirrored on Cad-AVL (MATA's AVL vendor).
+    // Confirmed live May 12, 2026 (1.58 MB, HTTP 200).
+    gtfs: "https://gtfs.mata.cadavl.com/MATA/GTFS/GTFS_MATA.zip",
+  },
   // Add agencies as their direct GTFS URLs are sourced. Examples to
   // pursue: WeGo Nashville (data.nashville.gov), CARTA Chattanooga
-  // (gocarta.org devs), MATA Memphis (matatransit.com gtfs-feed),
-  // KATS Kingsport (transitland-mirrored). Most need the dataset_ingest
-  // tool on Garbeast w/ a transitland API key for proper redirect chasing.
+  // (gocarta.org devs), KATS Kingsport (transitland-mirrored),
+  // ETHRA, Bristol. Most need the dataset_ingest tool on Garbeast
+  // w/ a transitland API key for proper redirect chasing.
 ];
 
 async function downloadAndExtractStops(agency) {
